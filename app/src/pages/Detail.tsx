@@ -48,7 +48,7 @@ const Detail: React.FC = () => {
     queryFn: () => readAllRepliesApi().then(res => res.data as Reply[] || []) // 답글 목록을 가져오는 API 호출
   });
  
-  const reviewMutation = useMutation({ // 리뷰 등록 mutation
+  const reviewAddMutation = useMutation({ // 리뷰 등록 mutation
     mutationFn: (review: Record<string, unknown>) => createReviewApi(review), // 리뷰 등록 API 호출
     onSuccess: () => { // 리뷰 등록 성공시
       alert('Your review has been successfully registered!');
@@ -67,7 +67,7 @@ const Detail: React.FC = () => {
     }
   });
 
-  const replyMutation = useMutation({ // 답글 등록 mutation
+  const replyAddMutation = useMutation({ // 답글 등록 mutation
     mutationFn: ({ reviewId, reply }: { reviewId: number, reply: Record<string, unknown> }) => createReplyApi(reviewId, reply), // 답글 등록 API 호출
     onSuccess: () => { // 답글 등록 성공시
       setReplyingTo(null);
@@ -204,7 +204,7 @@ const Detail: React.FC = () => {
       content: currentReview,
       // likes: [] → 새로 등록한 리뷰에 좋아요 수가 0이어야 하는데 1로 시작하는 문제로 주석 처리
     };
-    reviewMutation.mutate(review);
+    reviewAddMutation.mutate(review);
   };
 
   const toggleLike = async (reviewId: number) => { // 좋아요 토글 핸들러
@@ -250,7 +250,7 @@ const Detail: React.FC = () => {
       return;
     }
     const reply = { content: replyContent };
-    replyMutation.mutate({ reviewId, reply });
+    replyAddMutation.mutate({ reviewId, reply });
   };
 
   const startEdit = (review: Review) => { // 리뷰 수정 시작 핸들러
@@ -396,7 +396,7 @@ const Detail: React.FC = () => {
               rows={3}
               className="w-full border border-gray-300 rounded px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <button onClick={submitReview} disabled={reviewMutation.isPending || !currentReview.trim()}
+            <button onClick={submitReview} disabled={reviewAddMutation.isPending || !currentReview.trim()}
               className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed">
               Register review
             </button>
@@ -469,7 +469,7 @@ const Detail: React.FC = () => {
                     rows={2}
                     className="w-full border border-gray-300 rounded px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <button onClick={() => submitReply(review.id)} disabled={replyMutation.isPending || !replyContent.trim()}
+                  <button onClick={() => submitReply(review.id)} disabled={replyAddMutation.isPending || !replyContent.trim()}
                     className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Register reply
