@@ -3,11 +3,21 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import type { Book } from '../utils/type';
 import { getSessionValue } from '../utils/sessionValue';
+import { useQuery } from '@tanstack/react-query';
 
 const Home: React.FC = () => {
-  const [books, setBooks] = useState<Book[]>([]); // 도서 목록
-  const [loading, setLoading] = useState(true); // 로딩 상태
-  const [showErrorMessage, setShowErrorMessage] = useState(false); // 에러 메시지 표시 여부
+  // 기존 books, loading, showErrorMessage 상태 제거
+  // const [books, setBooks] = useState<Book[]>([]);
+  // const [loading, setLoading] = useState(true);
+  // const [showErrorMessage, setShowErrorMessage] = useState(false);
+  const { data, isLoading, isError } = useQuery<Book[]>({
+    queryKey: ['books'],
+    queryFn: async () => {
+      const response = await axios.get('https://openlibrary.org/search.json?q=frontend');
+      return response.data.docs;
+    }
+  });
+  const books: Book[] = useMemo(() => data ?? [], [data]);
   const [currentPage, setCurrentPage] = useState<number>( // 현재 페이지
     Number(getSessionValue('currentPage', '1'))
   );
@@ -17,18 +27,18 @@ const Home: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>( // 검색어
     getSessionValue('searchTerm', '')
   );
-
-  useEffect(() => {
-    axios.get('https://openlibrary.org/search.json?q=frontend') // Open Library API를 통해 도서 목록을 가져옴
-      .then(response => {
-        setBooks(response.data.docs); // 도서 목록을 books 변수에 저장
-        setLoading(false);
-      })
-      .catch(() => {
-        setShowErrorMessage(true);
-        setLoading(false);
-      });
-  }, []);
+  // useEffect로 books 데이터 가져오던 부분 삭제
+  // useEffect(() => {
+  //   axios.get('https://openlibrary.org/search.json?q=frontend')
+  //     .then(response => {
+  //       setBooks(response.data.docs);
+  //       setLoading(false);
+  //     })
+  //     .catch(() => {
+  //       setShowErrorMessage(true);
+  //       setLoading(false);
+  //     });
+  // }, []);
 
   useEffect(() => { // 상태 변경시 세션 스토리지에 저장
     sessionStorage.setItem('currentPage', String(currentPage));
@@ -46,7 +56,7 @@ const Home: React.FC = () => {
   const totalPages = useMemo(() => Math.ceil(filteredLists.length / itemsPerPage), [filteredLists, itemsPerPage]);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredLists.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems: Book[] = filteredLists.slice(indexOfFirstItem, indexOfLastItem);
 
   const handlePageChange = (pageNumber: number) => { // 페이지 변경 핸들러
     setCurrentPage(pageNumber);
@@ -71,6 +81,7 @@ const Home: React.FC = () => {
     }// eslint-disable-next-line
   }, [totalPages]);
 
+  // 렌더링 부분에서 loading, showErrorMessage 대신 isLoading, isError 사용
   return (
     <div className="container my-8">
       <h1 className="mb-6 text-center text-3xl font-bold">📚 Book List</h1>
@@ -80,20 +91,18 @@ const Home: React.FC = () => {
           onChange={e => setSearchTerm(e.target.value)} className="form-control max-w-md"
         />
       </div>
-
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center my-8">
           <div className="spinner-border text-blue-500"></div>
           <span className="sr-only">Loading...</span>
-          {showErrorMessage && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              Book datas haven't been loaded from the Open Library API. Please connect again!
-            </div>
-          )}
+        </div>
+      ) : isError ? (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          Book datas haven't been loaded from the Open Library API. Please connect again!
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          {currentItems.map(book => (
+          {currentItems.map((book: Book) => (
             <Link key={book.key} to={`/detail${book.key}`} className="block no-underline">
               <div className="card hover:shadow-lg transition-shadow h-full flex flex-col overflow-hidden">
                 <img src={book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`

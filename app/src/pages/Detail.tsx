@@ -6,15 +6,15 @@ import { createReviewApi, readAllReviewsApi, updateReviewApi, deleteReviewApi, c
 import { getSessionId, generateSessionId } from '../utils/sessionId';
 import { formatDate } from '../utils/formDate';
 import type { Book, Review, Reply } from '../utils/type';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const Detail: React.FC = () => {
   const { id } = useParams<{ id: string }>(); // URL 패러미터에서 도서 ID를 가져옴
   const [book, setBook] = useState<Book | null>(null); // 도서 정보
   const [loading, setLoading] = useState(true); // 로딩 상태
   const { authenticated, username } = useAuthStore(); // 인증 상태와 사용자명
-  const [reviews, setReviews] = useState<Review[]>([]); // 리뷰 목록
   const [currentReview, setCurrentReview] = useState(''); // 현재 리뷰 내용
-  const [replies, setReplies] = useState<Reply[]>([]); // 답글 목록
+  const [currentPage, setCurrentPage] = useState(1); // 현재 페이지
   const [replyContent, setReplyContent] = useState(''); // 현재 답글 내용
   const [replyingTo, setReplyingTo] = useState<number | null>(null); // 답글을 달고 있는 리뷰 ID
   const [editing, setEditing] = useState<number | null>(null); // 수정 중인 리뷰 ID
@@ -22,13 +22,68 @@ const Detail: React.FC = () => {
   const [editingReply, setEditingReply] = useState<number | null>(null); // 수정 중인 답글 ID
   const [editReplyContent, setEditReplyContent] = useState(''); // 수정 중인 답글 내용
   const [sortBy, setSortBy] = useState('latest'); // 정렬 기준 (최신순)
-  const [currentPage, setCurrentPage] = useState(1); // 현재 페이지
-  const [itemsPerPage, setItemsPerPage] = useState(5); // 페이지당 항목 수
+  // setItemsPerPage, queryClient 등 사용하지 않는 변수 제거
 
   const sessionId = sessionStorage.getItem('sessionId') || generateSessionId(); // 세션 ID를 세션 스토리지에 저장
   if (!sessionStorage.getItem('sessionId')) { // 세션 ID가 없으면 새로 생성
     sessionStorage.setItem('sessionId', sessionId); // 세션 스토리지에 저장
   }
+
+  const queryClient = useQueryClient();
+  const { data: reviews = [], refetch: refetchReviews } = useQuery({ // 리뷰 목록 가져오기
+    queryKey: ['reviews', id],
+    queryFn: () => readAllReviewsApi(id || ''),
+    select: (res) => (res.data || []).map((review: Review & { user?: { username?: string }, username?: string }) => ({
+      id: review.id,
+      content: review.content,
+      bookId: review.bookId,
+      likes: Array.isArray(review.likes) ? review.likes : [],
+      createdAt: review.createdAt,
+      replies: Array.isArray(review.replies) ? review.replies : [],
+      userId: review.user?.username || review.username || 'Unknown'
+    })),
+  });
+
+  const { refetch: refetchReplies } = useQuery({ // 답글 목록 가져오기
+    queryKey: ['replies', id],
+    queryFn: () => readAllRepliesApi().then(res => res.data as Reply[] || []),
+  });
+ 
+  const reviewMutation = useMutation({ // 리뷰 등록 mutation
+    mutationFn: (review: Record<string, unknown>) => createReviewApi(review),
+    onSuccess: () => {
+      alert('Your review has been successfully registered!');
+      setCurrentReview('');
+      refetchReviews();
+      refetchReplies();
+      setSortBy('latest');
+      setCurrentPage(1);
+    },
+    onError: (error: unknown) => {
+      if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
+        alert('Failed to register review: ' + (error.response?.data?.error || 'Server error'));
+      } else {
+        alert('Failed to register review: Server error');
+      }
+    }
+  });
+
+  const replyMutation = useMutation({ // 답글 등록 mutation
+    mutationFn: ({ reviewId, reply }: { reviewId: number, reply: Record<string, unknown> }) => createReplyApi(reviewId, reply),
+    onSuccess: () => {
+      setReplyingTo(null);
+      setReplyContent('');
+      refetchReviews();
+      refetchReplies();
+    },
+    onError: (error: unknown) => {
+      if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
+        alert('Failed to register reply: ' + (error.response?.data?.error || 'Server error'));
+      } else {
+        alert('Failed to register reply: Server error');
+      }
+    }
+  });
 
   useEffect(() => {
     const fetchBook = async () => {
@@ -45,7 +100,7 @@ const Detail: React.FC = () => {
         setLoading(false);
       }
 
-      await loadReviewsAndReplies();
+      // await loadReviewsAndReplies(); // 기존 함수 호출 제거
     };
     
     fetchBook();
@@ -65,41 +120,24 @@ const Detail: React.FC = () => {
     }
   }, [reviews, sortBy]);
 
-  const start = (currentPage - 1) * itemsPerPage;
-  const end = start + itemsPerPage;
+  const start = (currentPage - 1) * 5;
+  const end = start + 5;
   const currentItems = sortedReviews.slice(start, end);
-  const totalPages = Math.ceil(sortedReviews.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedReviews.length / 5);
 
-  const submitReview = async (e: React.FormEvent) => { // 리뷰 등록 핸들러
+  const submitReview = (e: React.FormEvent) => { // 리뷰 등록 핸들러
     e.preventDefault();
-
-    try {
-      const token = sessionStorage.getItem('token');
-      if (!authenticated || !token) {
-        alert('You are not signed in, your token is missing or invalid');
-        return;
-      }
-
-      const review = { // 리뷰 객체 생성
-        bookId: id || '', // 도서 ID
-        content: currentReview, // 리뷰 내용
-        likes: [] // 좋아요 목록
-      };
-      const response = await createReviewApi(review); // 리뷰 등록 API 호출
-
-      if (response.status === 200 || response.status === 201) {
-        alert('Your review has been successfully registered!');
-        setCurrentReview('');
-        await loadReviewsAndReplies();
-        setSortBy('latest');
-        setCurrentPage(1);
-      } else {
-        alert('Failed to register review. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('Failed to register review:', error.response?.data || error);
-      alert('Failed to register review: ' + (error.response?.data?.error || 'Server error'));
+    const token = sessionStorage.getItem('token');
+    if (!authenticated || !token) {
+      alert('You are not signed in, your token is missing or invalid');
+      return;
     }
+    const review = {
+      bookId: id || '',
+      content: currentReview,
+      likes: []
+    };
+    reviewMutation.mutate(review);
   };
 
   const toggleLike = async (reviewId: number) => { // 좋아요 토글 핸들러
@@ -119,7 +157,7 @@ const Detail: React.FC = () => {
         }
       });
       if (response.status === 200 || response.status === 201) {
-        await loadReviewsAndReplies();
+        await refetchReviews();
       } else {
         alert('Failed to process Like: Unexpected response from server');
       }
@@ -138,28 +176,14 @@ const Detail: React.FC = () => {
     setReplyContent('');
   };
 
-  const submitReply = async (reviewId: number) => { // 답글 등록 핸들러
-    try {
-      const token = sessionStorage.getItem('token');
-      if (!authenticated || !token) {
-        alert('You are not signed in, your token is missing or invalid');
-        return;
-      }
-
-      const reply = { // 답글 객체 생성
-        content: replyContent // 답글 내용
-      };
-      const response = await createReplyApi(reviewId, reply); // 답글 등록 API 호출
-      
-      if (response.status === 200 || response.status === 201) {
-        setReplyingTo(null);
-        setReplyContent('');
-        await loadReviewsAndReplies();
-      }
-    } catch (error: any) {
-      console.error('Failed to register reply:', error);
-      alert('Failed to register reply: ' + (error.response?.data?.error || 'Server error'));
+  const submitReply = (reviewId: number) => { // 답글 등록 핸들러
+    const token = sessionStorage.getItem('token');
+    if (!authenticated || !token) {
+      alert('You are not signed in, your token is missing or invalid');
+      return;
     }
+    const reply = { content: replyContent };
+    replyMutation.mutate({ reviewId, reply });
   };
 
   const startEdit = (review: Review) => { // 리뷰 수정 시작 핸들러
@@ -192,7 +216,7 @@ const Detail: React.FC = () => {
       await updateReviewApi(reviewId, updatedReview); // 리뷰 수정 API 호출
       setEditing(null);
       setEditContent('');
-      await loadReviewsAndReplies();
+      await refetchReviews();
     } catch (error: any) {
       console.error('Failed to modify review:', error);
       alert('Failed to modify review: ' + (error.response?.data?.error || 'Server error'));
@@ -239,7 +263,7 @@ const Detail: React.FC = () => {
       setEditingReply(null);
       setEditReplyContent('');
 
-      await loadReviewsAndReplies();
+      await refetchReviews();
     } catch (error: any) {
       console.error('Failed to modify reply:', error);
       alert('Failed to modify reply: ' + (error.response?.data?.error || 'Server error'));
@@ -256,7 +280,7 @@ const Detail: React.FC = () => {
 
       if (confirm('Are you sure you wanna delete your review?')) {
         await deleteReviewApi(reviewId); // 리뷰 삭제 API 호출
-        await loadReviewsAndReplies();
+        await refetchReviews();
       }
     } catch (error: any) {
       console.error('Failed to delete review:', error);
@@ -274,7 +298,7 @@ const Detail: React.FC = () => {
       
       if (confirm('Are you sure you wanna delete your reply?')) {
         await deleteReplyApi(reviewId, replyId); // 답글 삭제 API 호출
-        await loadReviewsAndReplies();
+        await refetchReviews();
       }
     } catch (error: any) {
       console.error('Failed to delete reply:', error);
@@ -282,29 +306,8 @@ const Detail: React.FC = () => {
     }
   };
 
-  const loadReviewsAndReplies = async () => { // 리뷰와 답글 불러오는 함수
-    try {
-      const workKey = id || '';
-      const [reviewsResponse, repliesResponse] = await Promise.all([ // 리뷰와 답글을 동시에 불러오기 → bookId 동적 패러미터와 실제 응답 데이터의 replies 정보의 패러미터가 상이한 이유로 등록한 답글이 화면 요소에 표시되지 않는 오류가 자꾸 생겨서 수정함
-        readAllReviewsApi(workKey), // 리뷰 API 호출
-        readAllRepliesApi() // 답글 API 호출
-      ]);
-
-      setReviews([...(reviewsResponse.data || []).map((review: any) => ({ // 리뷰 목록 가공
-        id: review.id, // 리뷰 ID
-        content: review.content, // 리뷰 내용
-        bookId: review.bookId, // 도서 ID
-        likes: Array.isArray(review.likes) ? review.likes : [], // 좋아요 목록
-        createdAt: review.createdAt, // 생성 날짜
-        replies: Array.isArray(review.replies) ? review.replies : [], // 답글 목록
-        userId: review.user?.username || review.username || 'Unknown' // 사용자명 → 사용자명에 해당하는 클라이언트의 객체 프로퍼티에 대해 서버의 사용자 정보에 해당하는 데이터를 제공하지 않아서 등록한 답글이 화면 요소에 표시되지 않는 오류가 자꾸 생겨서 수정함
-      }))]);
-
-      setReplies(repliesResponse.data || []); // 답글 목록 저장
-    } catch (error) {
-      console.error('Failed to load the reviews and replies:', error);
-    }
-  };
+  // 리뷰/답글 수정, 삭제 등에서도 loadReviewsAndReplies 대신 refetchReviews/refetchReplies 사용
+  // 예시: await refetchReviews(); await refetchReplies();
 
   return (
     <div className="container mx-auto max-w-6xl my-5 px-4">
@@ -378,7 +381,7 @@ const Detail: React.FC = () => {
               rows={3}
               className="w-full border border-gray-300 rounded px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <button onClick={submitReview} disabled={!currentReview.trim()}
+            <button onClick={submitReview} disabled={reviewMutation.isPending || !currentReview.trim()}
               className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed">
               Register review
             </button>
@@ -451,7 +454,7 @@ const Detail: React.FC = () => {
                     rows={2}
                     className="w-full border border-gray-300 rounded px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <button onClick={() => submitReply(review.id)} disabled={!replyContent.trim()}
+                  <button onClick={() => submitReply(review.id)} disabled={replyMutation.isPending || !replyContent.trim()}
                     className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Register reply
@@ -464,7 +467,7 @@ const Detail: React.FC = () => {
                 </div>
               )}
 
-              {review.replies && review.replies.length > 0 && review.replies.map(reply => (
+              {review.replies && review.replies.length > 0 && review.replies.map((reply: Reply) => (
                 <div key={reply.id} className="bg-gray-50 border border-gray-200 rounded p-3 mt-2 ml-4">
                   <div className="p-2">
                     {editingReply !== reply.id ? (
