@@ -135,7 +135,7 @@ const Detail: React.FC = () => {
     const review = {
       bookId: id || '',
       content: currentReview,
-      likes: []
+      // likes: [] → 새로 등록한 리뷰에 좋아요 수가 0이어야 하는데 1로 시작하는 문제로 주석 처리
     };
     reviewMutation.mutate(review);
   };
