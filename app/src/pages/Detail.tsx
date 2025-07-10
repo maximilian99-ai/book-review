@@ -6,7 +6,7 @@ import { createReviewApi, readAllReviewsApi, updateReviewApi, deleteReviewApi, c
 import { getSessionId, generateSessionId } from '../utils/sessionId';
 import { formatDate } from '../utils/formDate';
 import type { Book, Review, Reply } from '../utils/type';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 
 const Detail: React.FC = () => {
   const { id } = useParams<{ id: string }>(); // URL 패러미터에서 도서 ID를 가져옴
@@ -28,8 +28,6 @@ const Detail: React.FC = () => {
   if (!sessionStorage.getItem('sessionId')) { // 세션 ID가 없으면 새로 생성
     sessionStorage.setItem('sessionId', sessionId); // 세션 스토리지에 저장
   }
-
-  const queryClient = useQueryClient();
   
   const { data: reviews = [], refetch: refetchReviews } = useQuery({ // 리뷰 목록 가져오기
     queryKey: ['reviews', id], // 도서 ID를 포함한 쿼리 키
