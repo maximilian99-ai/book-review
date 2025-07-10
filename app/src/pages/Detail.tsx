@@ -30,10 +30,11 @@ const Detail: React.FC = () => {
   }
 
   const queryClient = useQueryClient();
+  
   const { data: reviews = [], refetch: refetchReviews } = useQuery({ // 리뷰 목록 가져오기
-    queryKey: ['reviews', id],
-    queryFn: () => readAllReviewsApi(id || ''),
-    select: (res) => (res.data || []).map((review: Review & { user?: { username?: string }, username?: string }) => ({
+    queryKey: ['reviews', id], // 도서 ID를 포함한 쿼리 키
+    queryFn: () => readAllReviewsApi(id || ''), // 도서 ID를 기반으로 리뷰 목록을 가져오는 API 호출
+    select: (res) => (res.data || []).map((review: Review & { user?: { username?: string }, username?: string }) => ({ // 리뷰 데이터 가공
       id: review.id,
       content: review.content,
       bookId: review.bookId,
@@ -41,17 +42,17 @@ const Detail: React.FC = () => {
       createdAt: review.createdAt,
       replies: Array.isArray(review.replies) ? review.replies : [],
       userId: review.user?.username || review.username || 'Unknown'
-    })),
+    }))
   });
 
   const { refetch: refetchReplies } = useQuery({ // 답글 목록 가져오기
-    queryKey: ['replies', id],
-    queryFn: () => readAllRepliesApi().then(res => res.data as Reply[] || []),
+    queryKey: ['replies', id], // 도서 ID를 포함한 쿼리 키
+    queryFn: () => readAllRepliesApi().then(res => res.data as Reply[] || []) // 답글 목록을 가져오는 API 호출
   });
  
   const reviewMutation = useMutation({ // 리뷰 등록 mutation
-    mutationFn: (review: Record<string, unknown>) => createReviewApi(review),
-    onSuccess: () => {
+    mutationFn: (review: Record<string, unknown>) => createReviewApi(review), // 리뷰 등록 API 호출
+    onSuccess: () => { // 리뷰 등록 성공시
       alert('Your review has been successfully registered!');
       setCurrentReview('');
       refetchReviews();
@@ -59,7 +60,7 @@ const Detail: React.FC = () => {
       setSortBy('latest');
       setCurrentPage(1);
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown) => { // 리뷰 등록 실패시
       if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
         alert('Failed to register review: ' + (error.response?.data?.error || 'Server error'));
       } else {
@@ -69,18 +70,86 @@ const Detail: React.FC = () => {
   });
 
   const replyMutation = useMutation({ // 답글 등록 mutation
-    mutationFn: ({ reviewId, reply }: { reviewId: number, reply: Record<string, unknown> }) => createReplyApi(reviewId, reply),
-    onSuccess: () => {
+    mutationFn: ({ reviewId, reply }: { reviewId: number, reply: Record<string, unknown> }) => createReplyApi(reviewId, reply), // 답글 등록 API 호출
+    onSuccess: () => { // 답글 등록 성공시
       setReplyingTo(null);
       setReplyContent('');
       refetchReviews();
       refetchReplies();
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown) => { // 답글 등록 실패시
       if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
         alert('Failed to register reply: ' + (error.response?.data?.error || 'Server error'));
       } else {
         alert('Failed to register reply: Server error');
+      }
+    }
+  });
+
+  const reviewEditMutation = useMutation({ // 리뷰 수정 mutation
+    mutationFn: async ({ reviewId, updatedReview }: { reviewId: number, updatedReview: Record<string, unknown> }) => {
+      return await updateReviewApi(reviewId, updatedReview); // 리뷰 수정 API 호출
+    },
+    onSuccess: () => { // 리뷰 수정 성공시
+      setEditing(null);
+      setEditContent('');
+      refetchReviews();
+    },
+    onError: (error: unknown) => { // 리뷰 수정 실패시
+      if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
+        alert('Failed to modify review: ' + (error.response?.data?.error || 'Server error'));
+      } else {
+        alert('Failed to modify review: Server error');
+      }
+    }
+  });
+  
+  const reviewDeleteMutation = useMutation({ // 리뷰 삭제 mutation
+    mutationFn: async (reviewId: number) => {
+      return await deleteReviewApi(reviewId); // 리뷰 삭제 API 호출
+    },
+    onSuccess: () => { // 리뷰 삭제 성공시
+      refetchReviews();
+    },
+    onError: (error: unknown) => { // 리뷰 삭제 실패시
+      if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
+        alert('Failed to delete review: ' + (error.response?.data?.error || 'Server error'));
+      } else {
+        alert('Failed to delete review: Server error');
+      }
+    }
+  });
+  
+  const replyEditMutation = useMutation({ // 답글 수정 mutation
+    mutationFn: async ({ replyId, reply }: { replyId: number, reply: Record<string, unknown> }) => {
+      return await updateReplyApi(replyId, reply); // 답글 수정 API 호출
+    },
+    onSuccess: () => { // 답글 수정 성공시
+      setEditingReply(null);
+      setEditReplyContent('');
+      refetchReviews();
+    },
+    onError: (error: unknown) => { // 답글 수정 실패시
+      if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
+        alert('Failed to modify reply: ' + (error.response?.data?.error || 'Server error'));
+      } else {
+        alert('Failed to modify reply: Server error');
+      }
+    }
+  });
+  
+  const replyDeleteMutation = useMutation({ // 답글 삭제 mutation
+    mutationFn: async ({ reviewId, replyId }: { reviewId: number, replyId: number }) => {
+      return await deleteReplyApi(reviewId, replyId); // 답글 삭제 API 호출
+    },
+    onSuccess: () => { // 답글 삭제 성공시
+      refetchReviews();
+    },
+    onError: (error: unknown) => { // 답글 삭제 실패시
+      if (error && typeof error === 'object' && 'response' in error) { // @ts-expect-error: error 객체에 response 프로퍼티가 없을 수 있으나, axios 에러 타입을 안전하게 처리하기 위함
+        alert('Failed to delete reply: ' + (error.response?.data?.error || 'Server error'));
+      } else {
+        alert('Failed to delete reply: Server error');
       }
     }
   });
@@ -195,32 +264,22 @@ const Detail: React.FC = () => {
     setEditContent(review.content);
   };
 
-  const submitEdit = async (reviewId: number) => { // 리뷰 수정 핸들러
-    try {
-      const token = sessionStorage.getItem('token');
-      if (!authenticated || !token) {
-        alert('You are not signed in, your token is missing or invalid');
-        return;
-      }
-
-      const review = reviews.find(r => r.id === reviewId); // 수정할 리뷰 찾기
-      if (!review) return;
-
-      const updatedReview = { // 수정된 리뷰 객체 생성
-        content: editContent, // 수정된 리뷰 내용
-        bookId: review.bookId, // 도서 ID
-        likes: review.likes, // 좋아요 목록
-        createdAt: review.createdAt, // 생성 날짜
-        replies: review.replies // 답글 목록
-      };
-      await updateReviewApi(reviewId, updatedReview); // 리뷰 수정 API 호출
-      setEditing(null);
-      setEditContent('');
-      await refetchReviews();
-    } catch (error: any) {
-      console.error('Failed to modify review:', error);
-      alert('Failed to modify review: ' + (error.response?.data?.error || 'Server error'));
+  const submitEdit = (reviewId: number) => { // 리뷰 수정 핸들러
+    const token = sessionStorage.getItem('token');
+    if (!authenticated || !token) {
+      alert('You are not signed in, your token is missing or invalid');
+      return;
     }
+    const review = reviews.find((r: Review) => r.id === reviewId);
+    if (!review) return;
+    const updatedReview = {
+      content: editContent,
+      bookId: review.bookId,
+      likes: review.likes,
+      createdAt: review.createdAt,
+      replies: review.replies
+    };
+    reviewEditMutation.mutate({ reviewId, updatedReview });
   };
 
   const startEditReply = (reply: Reply) => { // 답글 수정 시작 핸들러
@@ -232,77 +291,35 @@ const Detail: React.FC = () => {
     setEditReplyContent(reply.content);
   };
 
-  const submitEditReply = async (reviewId: number, replyId: number) => { // 답글 수정 핸들러
-    try {
-      const token = sessionStorage.getItem('token');
-      if (!authenticated || !token) {
-        alert('You are not signed in, your token is missing or invalid');
-        return;
-      }
+  const submitEditReply = (replyId: number) => { // 답글 수정 핸들러
+    const token = sessionStorage.getItem('token');
+    if (!authenticated || !token) {
+      alert('You are not signed in, your token is missing or invalid');
+      return;
+    }
+    const reply = { content: editReplyContent };
+    replyEditMutation.mutate({ replyId, reply });
+  };
 
-      const reply = { // 수정된 답글 객체 생성
-        content: editReplyContent // 수정된 답글 내용
-      };
-      const response = await updateReplyApi(replyId, reply); // 답글 수정 API 호출
-      const review = reviews.find(r => r.id === reviewId); // 수정하려는 답글을 포함하는 리뷰 찾기
-    
-      if (review && response) { // 수정하려는 답글과 이를 포함하는 리뷰가 존재하는 경우
-        const replyIndex = review.replies.findIndex(r => r.id === replyId); // 답글 인덱스 찾기
-        if (replyIndex !== -1) { // 답글이 존재하는 경우
-          review.replies[replyIndex] = { // 수정된 답글로 교체
-            reviewId,
-            id: replyId,
-            content: editReplyContent,
-            userId: username ?? undefined,
-            authorId: username ?? '',
-            createdAt: new Date().toISOString()
-          };
-        }
-      }
-
-      setEditingReply(null);
-      setEditReplyContent('');
-
-      await refetchReviews();
-    } catch (error: any) {
-      console.error('Failed to modify reply:', error);
-      alert('Failed to modify reply: ' + (error.response?.data?.error || 'Server error'));
+  const deleteReview = (reviewId: number) => { // 리뷰 삭제 핸들러
+    const token = sessionStorage.getItem('token');
+    if (!authenticated || !token) {
+      alert('You are not signed in, your token is missing or invalid');
+      return;
+    }
+    if (confirm('Are you sure you wanna delete your review?')) {
+      reviewDeleteMutation.mutate(reviewId);
     }
   };
 
-  const deleteReview = async (reviewId: number) => { // 리뷰 삭제 핸들러
-    try {
-      const token = sessionStorage.getItem('token');
-      if (!authenticated || !token) {
-        alert('You are not signed in, your token is missing or invalid');
-        return;
-      }
-
-      if (confirm('Are you sure you wanna delete your review?')) {
-        await deleteReviewApi(reviewId); // 리뷰 삭제 API 호출
-        await refetchReviews();
-      }
-    } catch (error: any) {
-      console.error('Failed to delete review:', error);
-      alert('Failed to delete review: ' + (error.response?.data?.error || 'Server error'));
+  const deleteReply = (reviewId: number, replyId: number) => { // 답글 삭제 핸들러
+    const token = sessionStorage.getItem('token');
+    if (!authenticated || !token) {
+      alert('You are not signed in, your token is missing or invalid');
+      return;
     }
-  };
-
-  const deleteReply = async (reviewId: number, replyId: number) => { // 답글 삭제 핸들러
-    try {
-      const token = sessionStorage.getItem('token');
-      if (!authenticated || !token) {
-        alert('You are not signed in, your token is missing or invalid');
-        return;
-      }
-      
-      if (confirm('Are you sure you wanna delete your reply?')) {
-        await deleteReplyApi(reviewId, replyId); // 답글 삭제 API 호출
-        await refetchReviews();
-      }
-    } catch (error: any) {
-      console.error('Failed to delete reply:', error);
-      alert('Failed to delete reply: ' + (error.response?.data?.error || 'Server error'));
+    if (confirm('Are you sure you wanna delete your reply?')) {
+      replyDeleteMutation.mutate({ reviewId, replyId });
     }
   };
 
@@ -499,7 +516,7 @@ const Detail: React.FC = () => {
                           className="w-full border border-gray-300 rounded px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         <div>
-                          <button onClick={() => submitEditReply(review.id, reply.id)} disabled={!editReplyContent.trim()}
+                          <button onClick={() => submitEditReply(reply.id)} disabled={!editReplyContent.trim()}
                             className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Check

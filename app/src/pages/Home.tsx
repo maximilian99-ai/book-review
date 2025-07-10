@@ -10,9 +10,9 @@ const Home: React.FC = () => {
   // const [books, setBooks] = useState<Book[]>([]);
   // const [loading, setLoading] = useState(true);
   // const [showErrorMessage, setShowErrorMessage] = useState(false);
-  const { data, isLoading, isError } = useQuery<Book[]>({
-    queryKey: ['books'],
-    queryFn: async () => {
+  const { data, isLoading, isError } = useQuery<Book[]>({ // 요청 데이터, 로딩 상태, 에러 상태를 관리하기 위해 Open Library API 서버에서 데이터를 가져오는 useQuery를 사용
+    queryKey: ['books'], // 캐시 키 설정
+    queryFn: async () => { // 데이터를 가져오는 함수
       const response = await axios.get('https://openlibrary.org/search.json?q=frontend');
       return response.data.docs;
     }
