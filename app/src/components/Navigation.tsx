@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/useAuthStore';
 
 const Navigation: React.FC = () => {
-  const { authenticated, username, logout } = useAuthStore();
+  const { authenticated, username, logout } = useAuthStore(state => ({
+    authenticated: state.authenticated,
+    username: state.username,
+    logout: state.logout
+  }));
 
   return (
     <nav className="navbar">

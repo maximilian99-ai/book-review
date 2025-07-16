@@ -10,7 +10,7 @@ const Login: React.FC = () => {
   const [showErrorMessage, setShowErrorMessage] = useState(false); // 에러 메시지 표시 여부
   const navigate = useNavigate();
   const location = useLocation(); // 현재 라우트 정보
-  const { login } = useAuthStore(); // 로그인 상태 관리 훅
+  const login = useAuthStore(state => state.login); // 로그인 상태 관리 훅
 
   useEffect(() => {
     const state = location.state as LocationState | null; // 라우트 상태 정보
