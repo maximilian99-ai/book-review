@@ -11,7 +11,7 @@ const Navigation: React.FC = () => {
 
   return (
     <nav className="navbar">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', margin: '0 auto', padding: '0.75rem 1rem'}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', margin: '0 auto', padding: '0.75rem 1rem' }}>
         <Link to="/" className="navbar-brand">
           Book List
         </Link>
@@ -32,13 +32,7 @@ const Navigation: React.FC = () => {
               <button 
                 onClick={logout} 
                 className="nav-link"
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  padding: '0.5rem 0.75rem',
-                  color: '#495057',
-                  cursor: 'pointer'
-                }}
+                style={{ background: 'none', border: 'none', padding: '0.5rem 0.75rem', color: '#495057', cursor: 'pointer' }}
                 onMouseEnter={e => e.target.style.color = '#dc3545'}
                 onMouseLeave={e => e.target.style.color = '#495057'}
               >
